@@ -285,30 +285,33 @@ export const authRoute = new Hono()
   .get("/callback", async (c) => {
     const url = new URL(c.req.url);
     const code = url.searchParams.get("code");
+
     if (!code) return c.json({ error: "Missing OAuth code" }, 400);
 
+    // Exchange code for session
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error || !data?.session || !data.user) {
       console.error("OAuth code exchange error:", error);
       return c.json({ error: "Failed code exchange" }, 500);
     }
 
-    await ensureAppUser(data.user.id);
+    const userId = data.user.id;
 
+    // Ensure user exists in appUsers
+    await ensureAppUser(userId);
+
+    // Create an app session
     const sessionId = randomUUID();
     const expiresAt = data.session.expires_at ?? null;
 
-    await db
-      .insert(sessions)
-      .values({
-        id: sessionId,
-        userId: data.user.id,
-        refreshToken: data.session.refresh_token ?? null,
-        expiresAt: expiresAt,
-      })
-      .returning();
+    await db.insert(sessions).values({
+      id: sessionId,
+      userId,
+      refreshToken: data.session.refresh_token ?? null,
+      expiresAt,
+    });
 
-    // set encrypted cookie
+    // Set encrypted cookie
     c.header(
       "Set-Cookie",
       createSessionCookieValue(
@@ -319,5 +322,15 @@ export const authRoute = new Hono()
       ),
     );
 
-    return c.redirect(`${env.FRONTEND_URL}/dashboard`);
+    // Fetch role (same logic as /checkroles)
+    const [appUserRow] = await db.select().from(appUsers).where(eq(appUsers.id, userId));
+
+    const role = appUserRow?.role ?? "regular";
+
+    // Redirect based on role
+    if (role === "regular") {
+      return c.redirect(`${env.FRONTEND_URL}/application`);
+    } else {
+      return c.redirect(`${env.FRONTEND_URL}/dashboard`);
+    }
   });
