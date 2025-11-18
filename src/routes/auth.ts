@@ -158,42 +158,42 @@ export const authRoute = new Hono()
   })
 
   // OAuth callback — create session the same way
-  .get("/callback", async (c) => {
-    const url = new URL(c.req.url);
-    const code = url.searchParams.get("code");
-    if (!code) return c.json({ error: "Missing OAuth code" }, 400);
+  // .get("/callback", async (c) => {
+  //   const url = new URL(c.req.url);
+  //   const code = url.searchParams.get("code");
+  //   if (!code) return c.json({ error: "Missing OAuth code" }, 400);
 
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error || !data?.session || !data.user) {
-      console.error("OAuth code exchange error:", error);
-      return c.json({ error: "Failed code exchange" }, 500);
-    }
+  //   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  //   if (error || !data?.session || !data.user) {
+  //     console.error("OAuth code exchange error:", error);
+  //     return c.json({ error: "Failed code exchange" }, 500);
+  //   }
 
-    await ensureAppUser(data.user.id);
+  //   await ensureAppUser(data.user.id);
 
-    const sessionId = randomUUID();
-    const expiresAt = data.session.expires_at ?? null;
-    await db
-      .insert(sessions)
-      .values({
-        id: sessionId,
-        userId: data.user.id,
-        refreshToken: data.session.refresh_token ?? null,
-        expiresAt: expiresAt ?? null,
-      })
-      .returning();
+  //   const sessionId = randomUUID();
+  //   const expiresAt = data.session.expires_at ?? null;
+  //   await db
+  //     .insert(sessions)
+  //     .values({
+  //       id: sessionId,
+  //       userId: data.user.id,
+  //       refreshToken: data.session.refresh_token ?? null,
+  //       expiresAt: expiresAt ?? null,
+  //     })
+  //     .returning();
 
-    c.header(
-      "Set-Cookie",
-      createSessionCookieValue(
-        sessionId,
-        typeof expiresAt === "number"
-          ? Math.max(0, expiresAt - Math.floor(Date.now() / 1000))
-          : undefined,
-      ),
-    );
-    return c.redirect(`${env.FRONTEND_URL}/dashboard`);
-  })
+  //   c.header(
+  //     "Set-Cookie",
+  //     createSessionCookieValue(
+  //       sessionId,
+  //       typeof expiresAt === "number"
+  //         ? Math.max(0, expiresAt - Math.floor(Date.now() / 1000))
+  //         : undefined,
+  //     ),
+  //   );
+  //   return c.redirect(`${env.FRONTEND_URL}/dashboard`);
+  // })
 
   // Get current logged-in user info (using sessions -> appUsers)
   .get("/me", async (c) => {
