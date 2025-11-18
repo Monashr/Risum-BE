@@ -200,16 +200,25 @@ export const authRoute = new Hono()
     try {
       const cookie = c.req.header("cookie") || "";
       const sessionId = readSessionIdFromHeader(cookie);
-      if (!sessionId) return c.json({ user: null }, 200);
+      if (!sessionId) {
+        console.log("Session Id Error : ", sessionId);
+        return c.json({ user: null }, 200);
+      }
 
       const [sessionRow] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-      if (!sessionRow) return c.json({ user: null }, 200);
+      if (!sessionRow) {
+        console.log("Session Row Error : ", sessionRow);
+        return c.json({ user: null }, 200);
+      }
 
       const [appUserRow] = await db
         .select()
         .from(appUsers)
         .where(eq(appUsers.id, sessionRow.userId));
-      if (!appUserRow) return c.json({ user: null }, 200);
+      if (!appUserRow) {
+        console.log("App User Row Error : ", appUserRow);
+        return c.json({ user: null }, 200);
+      }
 
       return c.json({ user: { id: appUserRow.id, role: appUserRow.role } }, 200);
     } catch (err) {
@@ -223,16 +232,25 @@ export const authRoute = new Hono()
     try {
       const cookie = c.req.header("cookie") || "";
       const sessionId = readSessionIdFromHeader(cookie);
-      if (!sessionId) return c.json({ role: null }, 200);
+      if (!sessionId) {
+        console.log("No Session Id");
+        return c.json({ role: null }, 200);
+      }
 
       const [sessionRow] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-      if (!sessionRow) return c.json({ role: null }, 200);
+      if (!sessionRow) {
+        console.log("No Session Row");
+        return c.json({ role: null }, 200);
+      }
 
       const [appUserRow] = await db
         .select()
         .from(appUsers)
         .where(eq(appUsers.id, sessionRow.userId));
-      if (!appUserRow) return c.json({ role: null }, 200);
+      if (!appUserRow) {
+        console.log("App User Row Error");
+        return c.json({ role: null }, 200);
+      }
 
       console.log(appUserRow.role);
 
