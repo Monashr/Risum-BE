@@ -51,7 +51,6 @@ export function createSessionCookie(sessionId: string, maxAge?: number) {
     secure: isProduction, // must be true in production for cross-site
     sameSite: isProduction ? "none" : "lax", // <--- key change
     path: "/",
-    domain: isProduction ? APP_URL.toString() : undefined, // <-- REQUIRED
     maxAge: maxAge ?? 60 * 60 * 24 * 30,
   });
 }
