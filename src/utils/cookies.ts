@@ -4,6 +4,7 @@ import { env } from "../config/env";
 
 const COOKIE_NAME = env.COOKIE_NAME || "session_id";
 const COOKIE_SECRET = env.COOKIE_SECRET;
+const APP_URL = env.APP_URL;
 const isProduction = env.NODE_ENV === "production";
 
 // --- AES-256 Encryption ---
@@ -50,6 +51,7 @@ export function createSessionCookie(sessionId: string, maxAge?: number) {
     secure: isProduction, // must be true in production for cross-site
     sameSite: isProduction ? "none" : "lax", // <--- key change
     path: "/",
+    domain: isProduction ? APP_URL : undefined, // <-- REQUIRED
     maxAge: maxAge ?? 60 * 60 * 24 * 30,
   });
 }
