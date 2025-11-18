@@ -3,7 +3,6 @@ import { z } from "zod";
 const envSchema = z.object({
   NODE_ENV: z.string(),
   APP_URL: z.string(),
-  APP_URI: z.string(),
   FRONTEND_URL: z.string(),
   PORT: z.string().default("3000"),
 
