@@ -169,7 +169,7 @@ export const orderRoute = new Hono()
       paymentImageName = `payment_${Date.now()}.${paymentFile.name.split(".").pop()}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("payment_images")
+        .from("variant_images")
         .upload(paymentImageName, paymentFile);
 
       if (uploadError) {
@@ -177,7 +177,7 @@ export const orderRoute = new Hono()
         return c.json({ error: "Failed to upload payment image" }, 500);
       }
 
-      const { data } = supabase.storage.from("payment_images").getPublicUrl(paymentImageName);
+      const { data } = supabase.storage.from("variant_images").getPublicUrl(paymentImageName);
 
       paymentImageUrl = data.publicUrl;
     }
