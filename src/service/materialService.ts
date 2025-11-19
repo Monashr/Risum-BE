@@ -19,8 +19,8 @@ export async function getManyMaterial() {
   });
 }
 
-export async function insertMaterial(name: string, productId: number) {
-  return db
+export async function insertMaterial(tx: any, name: string, productId: number) {
+  return tx
     .insert(materials)
     .values({
       name,

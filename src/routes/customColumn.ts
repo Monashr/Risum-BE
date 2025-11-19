@@ -47,58 +47,60 @@ export const customColumnRoute = new Hono()
       return c.json({ error: "Missing required fields" }, 400);
     }
 
-    // DELETE EXISTING ROW FOR THIS PRODUCT
-    await softDelete(db, customColumns, customColumns.productId, productId);
+    const result = await db.transaction(async (tx) => {
+      // DELETE EXISTING ROW FOR THIS PRODUCT
+      await softDelete(tx, customColumns, customColumns.productId, productId);
 
-    // if (old?.pictureName) {
-    //   await supabase.storage.from("variant_images").remove([old.pictureName]);
-    // }
+      // INSERT NEW ROW
+      const [inserted] = await tx
+        .insert(customColumns)
+        .values({
+          name,
+          description,
+          productId,
+          pictureName: null,
+          pictureUrl: null,
+        })
+        .returning();
 
-    // INSERT NEW ROW
-    const [inserted] = await db
-      .insert(customColumns)
-      .values({
-        name,
-        description,
-        productId,
-        pictureName: null,
-        pictureUrl: null,
-      })
-      .returning();
+      if (!inserted) throw new Error("Failed to insert");
 
-    if (!inserted) return c.json({ error: "Failed to insert" }, 500);
+      // HANDLE IMAGE UPLOAD
+      let fileName: string | null = null;
+      let imageUrl: string | null = null;
 
-    // HANDLE IMAGE UPLOAD
-    let fileName: string | null = null;
-    let imageUrl: string | null = null;
+      if (file) {
+        const ext = file.name.split(".").pop();
+        fileName = `customColumn_${inserted.id}_${getCurrentDateNumber()}.${ext}`;
 
-    if (file) {
-      const ext = file.name.split(".").pop();
-      fileName = `customColumn_${inserted.id}_${getCurrentDateNumber()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("variant_images")
+          .upload(fileName, file);
 
-      const { error: uploadError } = await supabase.storage
-        .from("variant_images")
-        .upload(fileName, file);
+        if (uploadError) {
+          console.error(uploadError);
+          throw new Error(uploadError.message);
+        }
 
-      if (uploadError) {
-        console.error(uploadError);
-        return c.json({ error: uploadError.message }, 500);
+        const { data: publicUrlData } = supabase.storage
+          .from("variant_images")
+          .getPublicUrl(fileName);
+
+        imageUrl = publicUrlData.publicUrl;
+
+        await tx
+          .update(customColumns)
+          .set({
+            pictureName: fileName,
+            pictureUrl: imageUrl,
+          })
+          .where(eq(customColumns.id, inserted.id));
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(fileName);
+      return { inserted, fileName, imageUrl };
+    });
 
-      imageUrl = publicUrlData.publicUrl;
-
-      await db
-        .update(customColumns)
-        .set({
-          pictureName: fileName,
-          pictureUrl: imageUrl,
-        })
-        .where(eq(customColumns.id, inserted.id));
-    }
+    const { inserted, fileName, imageUrl } = result;
 
     return c.json(
       {

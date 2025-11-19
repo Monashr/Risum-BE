@@ -150,90 +150,94 @@ export const orderRoute = new Hono()
     const orderData = orderSchema.parse(JSON.parse(orderJson));
     const items = z.array(createOrderDetailSchema).parse(JSON.parse(itemsJson));
 
-    // Insert order
-    const [createdOrder] = await db
-      .insert(orders)
-      .values({
-        customerId: orderData.customerId,
-        fullName: orderData.fullName,
-        phone: orderData.phone,
-        address: orderData.address,
-        paymentImageName: null,
-        paymentImageUrl: null,
-      })
-      .returning();
+    const createdOrder = await db.transaction(async (tx) => {
+      // Insert order
+      const [order] = await tx
+        .insert(orders)
+        .values({
+          customerId: orderData.customerId,
+          fullName: orderData.fullName,
+          phone: orderData.phone,
+          address: orderData.address,
+          paymentImageName: null,
+          paymentImageUrl: null,
+        })
+        .returning();
 
-    if (!createdOrder) return c.json({ error: "Failed to insert order" }, 500);
+      if (!order) throw new Error("Failed to insert order");
 
-    // Insert each order item
-    for (const [index, item] of items.entries()) {
-      let imageUrl: string | null = null;
-      let logoUrl: string | null = null;
+      // Insert each order item
+      for (const [index, item] of items.entries()) {
+        let imageUrl: string | null = null;
+        let logoUrl: string | null = null;
 
-      // Upload item image
-      const imageFile = form.get(`itemImage_${index}`) as File | null;
-      let imageName = null;
+        // Upload item image
+        const imageFile = form.get(`itemImage_${index}`) as File | null;
+        let imageName = null;
 
-      console.log("IMAGE", imageFile);
+        console.log("IMAGE", imageFile);
 
-      if (imageFile) {
-        imageName = `order_item_${Date.now()}_${index}.${imageFile.name.split(".").pop()}`;
-        const { error: uploadError } = await supabase.storage
-          .from("variant_images")
-          .upload(imageName, imageFile);
+        if (imageFile) {
+          imageName = `order_item_${Date.now()}_${index}.${imageFile.name.split(".").pop()}`;
+          const { error: uploadError } = await supabase.storage
+            .from("variant_images")
+            .upload(imageName, imageFile);
 
-        if (!uploadError) {
-          const { data } = supabase.storage.from("variant_images").getPublicUrl(imageName);
-          imageUrl = data.publicUrl;
-          console.log("ERROR, ", uploadError);
+          if (!uploadError) {
+            const { data } = supabase.storage.from("variant_images").getPublicUrl(imageName);
+            imageUrl = data.publicUrl;
+            console.log("ERROR, ", uploadError);
+          }
         }
+
+        // Upload logo if exists
+        const logoFile = form.get(`itemLogo_${index}`) as File | null;
+        let logoName = null;
+
+        console.log("LOGO ", logoFile);
+        if (logoFile) {
+          logoName = `order_logo_${Date.now()}_${index}.${logoFile.name.split(".").pop()}`;
+          const { error: uploadError } = await supabase.storage
+            .from("variant_images")
+            .upload(logoName, logoFile);
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from("variant_images").getPublicUrl(logoName);
+            logoUrl = data.publicUrl;
+            console.log("ERROR, ", uploadError);
+          }
+        }
+
+        await tx.insert(orderDetails).values({
+          orderId: order.id as any, // UUID -> any for insertion
+          productId: item.productId,
+
+          size: item.size ?? null,
+          materialId: item.materialId ?? null,
+          variantId: item.variantId ?? null,
+          colorId: item.colorId ?? null,
+
+          borderLengthId: item.borderLengthId ?? null,
+          borderLengthAmount: item.borderLengthAmount ?? 0,
+
+          logoName: logoName ?? null,
+          logoUrl: logoUrl ?? null,
+
+          designName: imageName ?? null,
+          designUrl: imageUrl ?? null,
+
+          customColumnId: item.customColumnId ?? null,
+          customColumnAnswer: item.customColumnAnswer ?? null,
+
+          text: item.text ?? null,
+
+          quantity: item.quantity,
+          totalPrice: item.totalPrice,
+        });
       }
 
-      // Upload logo if exists
-      const logoFile = form.get(`itemLogo_${index}`) as File | null;
-      let logoName = null;
-
-      console.log("LOGO ", logoFile);
-      if (logoFile) {
-        logoName = `order_logo_${Date.now()}_${index}.${logoFile.name.split(".").pop()}`;
-        const { error: uploadError } = await supabase.storage
-          .from("variant_images")
-          .upload(logoName, logoFile);
-
-        if (!uploadError) {
-          const { data } = supabase.storage.from("variant_images").getPublicUrl(logoName);
-          logoUrl = data.publicUrl;
-          console.log("ERROR, ", uploadError);
-        }
-      }
-
-      await db.insert(orderDetails).values({
-        orderId: createdOrder.id as any, // UUID -> any for insertion
-        productId: item.productId,
-
-        size: item.size ?? null,
-        materialId: item.materialId ?? null,
-        variantId: item.variantId ?? null,
-        colorId: item.colorId ?? null,
-
-        borderLengthId: item.borderLengthId ?? null,
-        borderLengthAmount: item.borderLengthAmount ?? 0,
-
-        logoName: logoName ?? null,
-        logoUrl: logoUrl ?? null,
-
-        designName: imageName ?? null,
-        designUrl: imageUrl ?? null,
-
-        customColumnId: item.customColumnId ?? null,
-        customColumnAnswer: item.customColumnAnswer ?? null,
-
-        text: item.text ?? null,
-
-        quantity: item.quantity,
-        totalPrice: item.totalPrice,
-      });
-    }
+      return order;
+    });
 
     return c.json({ order: createdOrder }, 201);
   });

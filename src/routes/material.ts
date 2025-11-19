@@ -47,43 +47,49 @@ export const materialRoute = new Hono()
       }
     }
 
-    const insertedRows = await insertMaterial(name!, productId!);
+    const result = await db.transaction(async (tx) => {
+      const insertedRows = await insertMaterial(tx, name!, productId!);
 
-    if (!insertedRows || insertedRows.length === 0) {
-      return c.json({ error: "Failed to insert material" }, 500);
-    }
-
-    const inserted = insertedRows[0];
-    let imageUrl: string | null = null;
-    let fileName: string | null = null;
-
-    if (file) {
-      const ext = file.name.split(".").pop();
-      fileName = `material_${inserted.id}_${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("variant_images")
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error(uploadError);
-        return c.json({ error: uploadError.message }, 500);
+      if (!insertedRows || insertedRows.length === 0) {
+        throw new Error("Failed to insert material");
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(fileName);
+      const inserted = insertedRows[0];
+      let imageUrl: string | null = null;
+      let fileName: string | null = null;
 
-      imageUrl = publicUrlData.publicUrl;
+      if (file) {
+        const ext = file.name.split(".").pop();
+        fileName = `material_${inserted.id}_${Date.now()}.${ext}`;
 
-      await db
-        .update(materials)
-        .set({
-          pictureName: fileName,
-          pictureUrl: imageUrl,
-        })
-        .where(eq(materials.id, inserted.id));
-    }
+        const { error: uploadError } = await supabase.storage
+          .from("variant_images")
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error(uploadError);
+          throw new Error(uploadError.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("variant_images")
+          .getPublicUrl(fileName);
+
+        imageUrl = publicUrlData.publicUrl;
+
+        await tx
+          .update(materials)
+          .set({
+            pictureName: fileName,
+            pictureUrl: imageUrl,
+          })
+          .where(eq(materials.id, inserted.id));
+      }
+
+      return { inserted, imageUrl, fileName };
+    });
+
+    const { inserted, imageUrl, fileName } = result;
 
     return c.json(
       {

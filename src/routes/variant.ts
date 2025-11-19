@@ -30,43 +30,49 @@ export const variantRoute = new Hono()
       }
     }
 
-    const insertedRows = await insertVariant(name!, additionPrice!, productId!);
+    const result = await db.transaction(async (tx) => {
+      const insertedRows = await insertVariant(tx, name!, additionPrice!, productId!);
 
-    if (!insertedRows || insertedRows.length === 0) {
-      return c.json({ error: "Failed to insert variant" }, 500);
-    }
-
-    const inserted = insertedRows[0];
-    let imageUrl: string | null = null;
-    let fileName: string | null = null;
-
-    if (file) {
-      const ext = file.name.split(".").pop();
-      fileName = `variant_${inserted.id}_${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("variant_images")
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error(uploadError);
-        return c.json({ error: uploadError.message }, 500);
+      if (!insertedRows || insertedRows.length === 0) {
+        throw new Error("Failed to insert variant");
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(fileName);
+      const inserted = insertedRows[0];
+      let imageUrl: string | null = null;
+      let fileName: string | null = null;
 
-      imageUrl = publicUrlData.publicUrl;
+      if (file) {
+        const ext = file.name.split(".").pop();
+        fileName = `variant_${inserted.id}_${Date.now()}.${ext}`;
 
-      await db
-        .update(variants)
-        .set({
-          pictureName: fileName,
-          pictureUrl: imageUrl,
-        })
-        .where(eq(variants.id, inserted.id));
-    }
+        const { error: uploadError } = await supabase.storage
+          .from("variant_images")
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error(uploadError);
+          throw new Error(uploadError.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("variant_images")
+          .getPublicUrl(fileName);
+
+        imageUrl = publicUrlData.publicUrl;
+
+        await tx
+          .update(variants)
+          .set({
+            pictureName: fileName,
+            pictureUrl: imageUrl,
+          })
+          .where(eq(variants.id, inserted.id));
+      }
+
+      return { inserted, imageUrl, fileName };
+    });
+
+    const { inserted, imageUrl, fileName } = result;
 
     return c.json(
       {

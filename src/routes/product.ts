@@ -115,63 +115,69 @@ export const productRoute = new Hono()
       return c.json({ error: "Missing required fields" }, 400);
     }
 
-    const insertedRows = await db
-      .insert(products)
-      .values({
-        name,
-        price,
-        size,
-        material,
-        variant,
-        color,
-        customColumn,
-        canAddText,
-        canAddBorderLength,
-        canAddLogo,
-        sizeImageName: sizeImage,
-        sizeImageUrl: sizeImage,
-        pictureName: null,
-        pictureUrl: null,
-        category: category,
-      })
-      .returning();
+    const result = await db.transaction(async (tx) => {
+      const insertedRows = await tx
+        .insert(products)
+        .values({
+          name,
+          price,
+          size,
+          material,
+          variant,
+          color,
+          customColumn,
+          canAddText,
+          canAddBorderLength,
+          canAddLogo,
+          sizeImageName: sizeImage,
+          sizeImageUrl: sizeImage,
+          pictureName: null,
+          pictureUrl: null,
+          category: category,
+        })
+        .returning();
 
-    if (insertedRows.length === 0) {
-      return c.json({ error: "Failed to insert product" }, 500);
-    }
-
-    const inserted = insertedRows[0]!;
-
-    let imageUrl: string | null = null;
-    let fileName: string | null = null;
-
-    if (file) {
-      const fileExt = file.name.split(".").pop();
-      fileName = `product_${inserted.id}_${getCurrentDateNumber()}.${fileExt}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("variant_images")
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error(uploadError);
-        return c.json({ error: uploadError.message }, 500);
+      if (insertedRows.length === 0) {
+        throw new Error("Failed to insert product");
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(fileName);
+      const inserted = insertedRows[0]!;
 
-      imageUrl = publicUrlData.publicUrl;
+      let imageUrl: string | null = null;
+      let fileName: string | null = null;
 
-      await db
-        .update(products)
-        .set({
-          pictureName: fileName,
-          pictureUrl: imageUrl,
-        })
-        .where(eq(products.id, inserted.id));
-    }
+      if (file) {
+        const fileExt = file.name.split(".").pop();
+        fileName = `product_${inserted.id}_${getCurrentDateNumber()}.${fileExt}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("variant_images")
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error(uploadError);
+          throw new Error(uploadError.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("variant_images")
+          .getPublicUrl(fileName);
+
+        imageUrl = publicUrlData.publicUrl;
+
+        await tx
+          .update(products)
+          .set({
+            pictureName: fileName,
+            pictureUrl: imageUrl,
+          })
+          .where(eq(products.id, inserted.id));
+      }
+
+      return { inserted, fileName, imageUrl };
+    });
+
+    const { inserted, fileName, imageUrl } = result;
 
     return c.json(
       {
@@ -261,63 +267,67 @@ export const productRoute = new Hono()
       return c.json({ error: "Name is required" }, 400);
     }
 
-    const existing = await db.query.products.findFirst({
-      where: eq(products.id, id),
+    const updated = await db.transaction(async (tx) => {
+      const existing = await tx.query.products.findFirst({
+        where: eq(products.id, id),
+      });
+
+      if (!existing) {
+        throw new Error("Product not found");
+      }
+
+      let imageUrl = existing.pictureUrl;
+      let imageName = existing.pictureName;
+
+      if (file) {
+        const fileExt = file.name.split(".").pop() || "jpg";
+        const filePath = `product_${id}_${getCurrentDateNumber()}.${fileExt}`;
+
+        if (imageName != null) {
+          await supabase.storage.from("variant_images").remove([imageName]);
+        }
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("variant_images")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+          });
+
+        if (uploadError) {
+          console.error(uploadError);
+          throw new Error(uploadError.message);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("variant_images")
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrlData.publicUrl;
+        imageName = filePath;
+      }
+
+      const [upd] = await tx
+        .update(products)
+        .set({
+          name,
+          price,
+          size,
+          material,
+          variant,
+          color,
+          customColumn,
+          canAddText,
+          canAddBorderLength,
+          canAddLogo,
+          pictureUrl: imageUrl ?? existing.pictureUrl,
+          pictureName: imageName ?? existing.pictureName,
+          category: category,
+        })
+        .where(eq(products.id, id))
+        .returning();
+
+      return upd;
     });
-
-    if (!existing) {
-      return c.json({ error: "Product not found" }, 404);
-    }
-
-    let imageUrl = existing.pictureUrl;
-    let imageName = existing.pictureName;
-
-    if (file) {
-      const fileExt = file.name.split(".").pop() || "jpg";
-      const filePath = `product_${id}_${getCurrentDateNumber()}.${fileExt}`;
-
-      if (imageName != null) {
-        await supabase.storage.from("variant_images").remove([imageName]);
-      }
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("variant_images")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-        });
-
-      if (uploadError) {
-        console.error(uploadError);
-        return c.json({ error: uploadError.message }, 500);
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(filePath);
-
-      imageUrl = publicUrlData.publicUrl;
-      imageName = filePath;
-    }
-
-    const [updated] = await db
-      .update(products)
-      .set({
-        name,
-        price,
-        size,
-        material,
-        variant,
-        color,
-        customColumn,
-        canAddText,
-        canAddBorderLength,
-        canAddLogo,
-        pictureUrl: imageUrl ?? existing.pictureUrl,
-        pictureName: imageName ?? existing.pictureName,
-        category: category,
-      })
-      .where(eq(products.id, id))
-      .returning();
 
     if (!updated) {
       return c.notFound();

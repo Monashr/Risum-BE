@@ -77,54 +77,58 @@ export const sizeRoute = new Hono()
       return c.json({ error: "Missing required fields" }, 400);
     }
 
-    const existing = await db.query.products.findFirst({
-      where: eq(products.id, id),
-    });
+    const updated = await db.transaction(async (tx) => {
+      const existing = await tx.query.products.findFirst({
+        where: eq(products.id, id),
+      });
 
-    if (!existing) {
-      return c.json({ error: "Product not found" }, 404);
-    }
+      if (!existing) {
+        throw new Error("Product not found");
+      }
 
-    let imageUrl = existing.sizeImageUrl;
-    let imageName = existing.sizeImageName;
+      let imageUrl = existing.sizeImageUrl;
+      let imageName = existing.sizeImageName;
 
-    if (file) {
-      const ext = file.name.split(".").pop() || "jpg";
+      if (file) {
+        const ext = file.name.split(".").pop() || "jpg";
 
-      const filePath = `size_${id}_${getCurrentDateNumber()}.${ext}`;
+        const filePath = `size_${id}_${getCurrentDateNumber()}.${ext}`;
 
-      if (imageName != null) {
-        const { data, error } = await supabase.storage
+        if (imageName != null) {
+          const { data, error } = await supabase.storage
+            .from("variant_images")
+            .remove([existing.sizeImageName!]);
+
+          console.log("removing image", data);
+        }
+
+        const { data, error } = await supabase.storage.from("variant_images").upload(filePath, file);
+
+        if (error) {
+          console.error(error);
+          throw new Error(error.message);
+        }
+
+        imageName = filePath;
+
+        const { data: publicUrlData } = supabase.storage
           .from("variant_images")
-          .remove([existing.sizeImageName!]);
+          .getPublicUrl(filePath);
 
-        console.log("removing image", data);
+        imageUrl = publicUrlData.publicUrl;
       }
 
-      const { data, error } = await supabase.storage.from("variant_images").upload(filePath, file);
+      const [upd] = await tx
+        .update(products)
+        .set({
+          sizeImageUrl: imageUrl ?? existing.sizeImageUrl,
+          sizeImageName: imageName ?? existing.sizeImageName,
+        })
+        .where(eq(products.id, id))
+        .returning();
 
-      if (error) {
-        console.error(error);
-        return c.json({ error: error.message }, 500);
-      }
-
-      imageName = filePath;
-
-      const { data: publicUrlData } = supabase.storage
-        .from("variant_images")
-        .getPublicUrl(filePath);
-
-      imageUrl = publicUrlData.publicUrl;
-    }
-
-    const [updated] = await db
-      .update(products)
-      .set({
-        sizeImageUrl: imageUrl ?? existing.sizeImageUrl,
-        sizeImageName: imageName ?? existing.sizeImageName,
-      })
-      .where(eq(products.id, id))
-      .returning();
+      return upd;
+    });
 
     return c.json({ product: updated! });
   });
