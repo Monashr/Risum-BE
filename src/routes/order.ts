@@ -8,6 +8,10 @@ import { authMiddleware } from "../middleware/auth";
 import { getCurrentDateNumber } from "../utils/getCurrentDate";
 import { getCurrentUser } from "../utils/getCurrentUser";
 import { products } from "../db/schema/products";
+import { borderLengths } from "../db/schema/borderLengths";
+import { colors } from "../db/schema/color";
+import { materials } from '../db/schema/materials';
+import { customColumns } from '../db/schema/customColumns';
 
 // ---------------------
 // ZOD SCHEMAS
@@ -30,6 +34,9 @@ const orderDetailSchema = z.object({
 
   logoName: z.string().nullable().optional(),
   logoUrl: z.string().nullable().optional(),
+
+  logoType: z.string().nullable().optional(),
+  logoCostAddition: z.number().nullable().optional(),
 
   designName: z.string().nullable().optional(),
   designUrl: z.string().nullable().optional(),
@@ -133,7 +140,16 @@ export const orderRoute = new Hono()
     const result = await db.query.orders.findFirst({
       where: eq(orders.id, id),
       with: {
-        orderDetails: true,
+        orderDetails: {
+          with: {
+            products: true,
+            borderLengths: true,
+            colors: true,
+            materials: true,
+            variants: true,
+            customColumns: true,
+          },
+        },
         customer: true,
       },
     });
@@ -251,6 +267,9 @@ export const orderRoute = new Hono()
 
           logoName: logoName ?? null,
           logoUrl: logoUrl ?? null,
+
+          logoType: item.logoType ?? null,
+          logoCostAddition: item.logoCostAddition ?? null,
 
           designName: imageName ?? null,
           designUrl: imageUrl ?? null,

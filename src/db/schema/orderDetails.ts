@@ -53,6 +53,9 @@ export const orderDetails = pgTable("order_details", {
   logoName: text("logo_name"),
   logoUrl: text("logo_url"),
 
+  logoType: varchar("logo_type"),
+  logoCostAddition: integer("logo_cost_addition"),
+
   designName: text("design_name"),
   designUrl: text("design_url"),
 
@@ -85,5 +88,13 @@ export const orderDetailsRelations = relations(orderDetails, ({ one }) => ({
   borderLengths: one(borderLengths, {
     fields: [orderDetails.borderLengthId],
     references: [borderLengths.id],
+  }),
+  materials: one(materials, {
+    fields: [orderDetails.materialId],
+    references: [materials.id],
+  }),
+  customColumns: one(customColumns, {
+    fields: [orderDetails.customColumnId],
+    references: [customColumns.id],
   }),
 }));
