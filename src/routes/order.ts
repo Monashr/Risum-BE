@@ -5,6 +5,9 @@ import { orders, orderDetails } from "../db/schema";
 import { z } from "zod";
 import { eq, count } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { getCurrentDateNumber } from "../utils/getCurrentDate";
+import { getCurrentUser } from "../utils/getCurrentUser";
+import { products } from "../db/schema/products";
 
 // ---------------------
 // ZOD SCHEMAS
@@ -99,13 +102,20 @@ export const orderRoute = new Hono()
   // -----------------------------
   // GET ORDERS BY USER
   // -----------------------------
-  .get("/user/:userId", async (c) => {
-    const userId = c.req.param("userId");
+  .get("/user/user", async (c) => {
+    const user = await getCurrentUser(c);
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const userId = user.id;
 
     const result = await db.query.orders.findMany({
       where: (t, { eq }) => eq(t.customerId, userId),
       with: {
-        orderDetails: true,
+        orderDetails: {
+          with: {
+            products: true,
+          },
+        },
         customer: true,
       },
       orderBy: (t, { desc }) => desc(t.createdAt),
@@ -240,4 +250,60 @@ export const orderRoute = new Hono()
     });
 
     return c.json({ order: createdOrder }, 201);
+  })
+
+  // -----------------------------
+  // UPLOAD PAYMENT IMAGE
+  // -----------------------------
+  .put("/:id/payment-image", authMiddleware(), async (c) => {
+    const id = c.req.param("id");
+    const form = await c.req.formData();
+
+    const file = form.get("paymentImage") as File | null;
+
+    if (!file) {
+      return c.json({ error: "Missing payment image" }, 400);
+    }
+
+    const existing = await db.query.orders.findFirst({
+      where: eq(orders.id, id),
+    });
+
+    if (!existing) {
+      return c.json({ error: "Order not found" }, 404);
+    }
+
+    let imageUrl: string | null = null;
+    let imageName: string | null = null;
+
+    if (file) {
+      const ext = file.name.split(".").pop();
+      imageName = `payment_${id}_${getCurrentDateNumber()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("variant_images")
+        .upload(imageName, file);
+
+      if (uploadError) {
+        console.error(uploadError);
+        return c.json({ error: uploadError.message }, 500);
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("variant_images")
+        .getPublicUrl(imageName);
+
+      imageUrl = publicUrlData.publicUrl;
+    }
+
+    const [updated] = await db
+      .update(orders)
+      .set({
+        paymentImageUrl: imageUrl,
+        paymentImageName: imageName,
+      })
+      .where(eq(orders.id, id))
+      .returning();
+
+    return c.json({ order: updated });
   });

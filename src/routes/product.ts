@@ -2,9 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/client";
 import { borderLengths, colors, customColumns, products, variants } from "../db/schema";
-import { count, eq, isNull } from "drizzle-orm";
-import { sizes } from "../db/schema";
-import { materials } from "../db/schema/materials";
+import { eq, isNull, sql } from "drizzle-orm";
 import { supabase } from "../utils/supabase";
 import { getCurrentDateNumber } from "../utils/getCurrentDate";
 import { softDelete } from "../db/utils/softDeletes";
@@ -77,6 +75,11 @@ export const productRoute = new Hono()
 
     const offset = (parsed.page - 1) * parsed.limit;
 
+    const [{ count }] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(products)
+      .where(isNull(products.deletedAt));
+
     const result = await db.query.products.findMany({
       limit: parsed.limit,
       offset,
@@ -89,8 +92,8 @@ export const productRoute = new Hono()
       page: parsed.page,
       limit: parsed.limit,
       data: result,
-      total: result.length,
-      hasMore: offset + result.length < (total ?? 0),
+      total: count,
+      hasMore: offset + result.length < (count ?? 0),
     });
   })
 

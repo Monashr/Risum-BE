@@ -77,7 +77,7 @@ export const authRoute = new Hono()
         );
       }
       console.error("Signup error:", err);
-      return c.json({ error: "Internal server error" }, 500);
+      return c.json({ error: "Signup error", details: err }, 500);
     }
   })
 
@@ -164,7 +164,7 @@ export const authRoute = new Hono()
       return c.json({ message: "Signed out" });
     } catch (err) {
       console.error("Signout error:", err);
-      return c.json({ error: "Internal server error" }, 500);
+      return c.json({ error: err }, 500);
     }
   })
 
