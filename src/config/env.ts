@@ -8,6 +8,7 @@ const envSchema = z.object({
 
   COOKIE_NAME: z.string(),
   COOKIE_SECRET: z.string(),
+  COOKIE_DOMAIN: z.string().optional(),
 
   DATABASE_URL: z.string(),
   SUPABASE_URL: z.string(),

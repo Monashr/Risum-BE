@@ -38,6 +38,7 @@ function getCookieOptions(maxAge?: number) {
     sameSite: isProduction ? "lax" : "none", // "none" for cross-site dev testing
     path: "/",
     maxAge: maxAge ?? 60 * 60 * 24 * 30,
+    ...(env.COOKIE_DOMAIN && { domain: env.COOKIE_DOMAIN }),
   } as const;
 }
 
@@ -45,21 +46,12 @@ function getCookieOptions(maxAge?: number) {
 export function createSessionCookie(sessionId: string, maxAge?: number) {
   const encrypted = encrypt(sessionId);
 
-  return serialize(COOKIE_NAME, encrypted, {
-    httpOnly: true,
-    secure: isProduction, // must be true in production for cross-site
-    sameSite: isProduction ? "none" : "lax", // <--- key change
-    path: "/",
-    maxAge: maxAge ?? 60 * 60 * 24 * 30,
-  });
+  return serialize(COOKIE_NAME, encrypted, getCookieOptions(maxAge));
 }
 
 export function clearSessionCookie() {
   return serialize(COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
+    ...getCookieOptions(),
     maxAge: 0,
   });
 }

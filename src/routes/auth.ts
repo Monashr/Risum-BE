@@ -85,6 +85,14 @@ export const authRoute = new Hono()
       const body = await c.req.json();
       const { email, password } = signinSchema.parse(body);
 
+      const oldCookie = c.req.header("cookie") || "";
+      const oldSessionId = readSessionIdFromHeader(oldCookie);
+
+      if (oldSessionId) {
+        await db.delete(sessions).where(eq(sessions.id, oldSessionId));
+        c.header("Set-Cookie", clearSessionCookieValue());
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error || !data?.session || !data.user) {
@@ -263,10 +271,11 @@ export const authRoute = new Hono()
 
   .get("/login/google", async (c) => {
     try {
+      // Use FRONTEND_URL for redirectTo to enable proxying in production
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${env.APP_URL}/api/auth/callback`,
+          redirectTo: `${env.FRONTEND_URL}/api/auth/callback`,
         },
       });
 
