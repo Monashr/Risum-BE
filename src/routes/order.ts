@@ -155,10 +155,32 @@ export const orderRoute = new Hono()
     if (!orderJson || !itemsJson) {
       return c.json({ error: "Missing order or items" }, 400);
     }
-    console.log(itemsJson);
 
     const orderData = orderSchema.parse(JSON.parse(orderJson));
     const items = z.array(createOrderDetailSchema).parse(JSON.parse(itemsJson));
+
+    // 🔥 Handle payment image
+    const paymentFile = form.get("paymentImage") as File | null;
+
+    let paymentImageName: string | null = null;
+    let paymentImageUrl: string | null = null;
+
+    if (paymentFile) {
+      paymentImageName = `payment_${Date.now()}.${paymentFile.name.split(".").pop()}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("payment_images")
+        .upload(paymentImageName, paymentFile);
+
+      if (uploadError) {
+        console.error(uploadError);
+        return c.json({ error: "Failed to upload payment image" }, 500);
+      }
+
+      const { data } = supabase.storage.from("payment_images").getPublicUrl(paymentImageName);
+
+      paymentImageUrl = data.publicUrl;
+    }
 
     const createdOrder = await db.transaction(async (tx) => {
       // Insert order
@@ -169,8 +191,10 @@ export const orderRoute = new Hono()
           fullName: orderData.fullName,
           phone: orderData.phone,
           address: orderData.address,
-          paymentImageName: null,
-          paymentImageUrl: null,
+
+          // 🔥 Now NOT NULL (depending on DB)
+          paymentImageName: paymentImageName,
+          paymentImageUrl: paymentImageUrl,
         })
         .returning();
 
@@ -185,8 +209,6 @@ export const orderRoute = new Hono()
         const imageFile = form.get(`itemImage_${index}`) as File | null;
         let imageName = null;
 
-        console.log("IMAGE", imageFile);
-
         if (imageFile) {
           imageName = `order_item_${Date.now()}_${index}.${imageFile.name.split(".").pop()}`;
           const { error: uploadError } = await supabase.storage
@@ -196,15 +218,13 @@ export const orderRoute = new Hono()
           if (!uploadError) {
             const { data } = supabase.storage.from("variant_images").getPublicUrl(imageName);
             imageUrl = data.publicUrl;
-            console.log("ERROR, ", uploadError);
           }
         }
 
-        // Upload logo if exists
+        // Upload logo
         const logoFile = form.get(`itemLogo_${index}`) as File | null;
         let logoName = null;
 
-        console.log("LOGO ", logoFile);
         if (logoFile) {
           logoName = `order_logo_${Date.now()}_${index}.${logoFile.name.split(".").pop()}`;
           const { error: uploadError } = await supabase.storage
@@ -214,12 +234,11 @@ export const orderRoute = new Hono()
           if (!uploadError) {
             const { data } = supabase.storage.from("variant_images").getPublicUrl(logoName);
             logoUrl = data.publicUrl;
-            console.log("ERROR, ", uploadError);
           }
         }
 
         await tx.insert(orderDetails).values({
-          orderId: order.id as any, // UUID -> any for insertion
+          orderId: order.id as any,
           productId: item.productId,
 
           size: item.size ?? null,
