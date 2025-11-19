@@ -36,7 +36,7 @@ function getCookieOptions(maxAge?: number) {
   return {
     httpOnly: true,
     secure: isProduction, // secure in prod, false in dev
-    sameSite: isProduction ? "lax" : "none", // "none" for cross-site dev testing
+    sameSite: isProduction ? "none" : "lax", // none for cross-site in prod, lax for same-site in dev
     path: "/",
     maxAge: maxAge ?? 60 * 60 * 24 * 30,
     ...(env.COOKIE_DOMAIN && { domain: env.COOKIE_DOMAIN }),
