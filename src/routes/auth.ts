@@ -16,13 +16,15 @@ import { randomUUID } from "crypto";
 import { loginRateLimit } from "../middleware/rateLimitter";
 
 async function ensureAppUser(userId: string) {
-  const existing = await db.select().from(appUsers).where(eq(appUsers.id, userId));
-  if (existing.length === 0) {
-    await db.insert(appUsers).values({
-      id: userId,
-      role: "regular",
-    });
-  }
+  await db.transaction(async (tx) => {
+    const existing = await tx.select().from(appUsers).where(eq(appUsers.id, userId));
+    if (existing.length === 0) {
+      await tx.insert(appUsers).values({
+        id: userId,
+        role: "regular",
+      });
+    }
+  });
 }
 
 const signupSchema = z.object({
@@ -106,22 +108,23 @@ export const authRoute = new Hono()
         );
       }
 
-      // Ensure user exists in app_users
-      await ensureAppUser(data.user.id);
-
-      // Create session row in DB
+      // Ensure user exists in app_users and create session row in DB
       const sessionId = randomUUID();
       const expiresAt = data.session.expires_at ?? null;
 
-      const inserted = await db
-        .insert(sessions)
-        .values({
-          id: sessionId,
-          userId: data.user.id,
-          refreshToken: data.session.refresh_token ?? null,
-          expiresAt: expiresAt ?? null,
-        })
-        .returning();
+      await db.transaction(async (tx) => {
+        await ensureAppUser(data.user.id); // Note: ensureAppUser uses its own transaction, but for consistency
+
+        const inserted = await tx
+          .insert(sessions)
+          .values({
+            id: sessionId,
+            userId: data.user.id,
+            refreshToken: data.session.refresh_token ?? null,
+            expiresAt: expiresAt ?? null,
+          })
+          .returning();
+      });
 
       // Set secure http-only cookie with session id
       c.header(
@@ -213,22 +216,26 @@ export const authRoute = new Hono()
         return c.json({ user: null }, 200);
       }
 
-      const [sessionRow] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-      if (!sessionRow) {
-        console.log("Session Row Error : ", sessionRow);
-        return c.json({ user: null }, 200);
-      }
+      const result = await db.transaction(async (tx) => {
+        const [sessionRow] = await tx.select().from(sessions).where(eq(sessions.id, sessionId));
+        if (!sessionRow) {
+          console.log("Session Row Error : ", sessionRow);
+          return null;
+        }
 
-      const [appUserRow] = await db
-        .select()
-        .from(appUsers)
-        .where(eq(appUsers.id, sessionRow.userId));
-      if (!appUserRow) {
-        console.log("App User Row Error : ", appUserRow);
-        return c.json({ user: null }, 200);
-      }
+        const [appUserRow] = await tx
+          .select()
+          .from(appUsers)
+          .where(eq(appUsers.id, sessionRow.userId));
+        if (!appUserRow) {
+          console.log("App User Row Error : ", appUserRow);
+          return null;
+        }
 
-      return c.json({ user: { id: appUserRow.id, role: appUserRow.role } }, 200);
+        return { id: appUserRow.id, role: appUserRow.role };
+      });
+
+      return c.json({ user: result }, 200);
     } catch (err) {
       console.error("me error:", err);
       return c.json({ user: null }, 200);
@@ -245,24 +252,27 @@ export const authRoute = new Hono()
         return c.json({ role: null }, 200);
       }
 
-      const [sessionRow] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-      if (!sessionRow) {
-        console.log("No Session Row");
-        return c.json({ role: null }, 200);
-      }
+      const role = await db.transaction(async (tx) => {
+        const [sessionRow] = await tx.select().from(sessions).where(eq(sessions.id, sessionId));
+        if (!sessionRow) {
+          console.log("No Session Row");
+          return null;
+        }
 
-      const [appUserRow] = await db
-        .select()
-        .from(appUsers)
-        .where(eq(appUsers.id, sessionRow.userId));
-      if (!appUserRow) {
-        console.log("App User Row Error");
-        return c.json({ role: null }, 200);
-      }
+        const [appUserRow] = await tx
+          .select()
+          .from(appUsers)
+          .where(eq(appUsers.id, sessionRow.userId));
+        if (!appUserRow) {
+          console.log("App User Row Error");
+          return null;
+        }
 
-      console.log(appUserRow.role);
+        console.log(appUserRow.role);
+        return appUserRow.role;
+      });
 
-      return c.json({ role: appUserRow.role }, 200);
+      return c.json({ role }, 200);
     } catch (err) {
       console.error("checkroles error:", err);
       return c.json({ role: null }, 200);
@@ -302,20 +312,22 @@ export const authRoute = new Hono()
       return c.json({ error: "Failed code exchange" }, 500);
     }
 
-    await ensureAppUser(data.user.id);
-
     const sessionId = randomUUID();
     const expiresAt = data.session.expires_at ?? null;
 
-    await db
-      .insert(sessions)
-      .values({
-        id: sessionId,
-        userId: data.user.id,
-        refreshToken: data.session.refresh_token ?? null,
-        expiresAt: expiresAt,
-      })
-      .returning();
+    await db.transaction(async (tx) => {
+      await ensureAppUser(data.user.id);
+
+      await tx
+        .insert(sessions)
+        .values({
+          id: sessionId,
+          userId: data.user.id,
+          refreshToken: data.session.refresh_token ?? null,
+          expiresAt: expiresAt,
+        })
+        .returning();
+    });
 
     // set encrypted cookie
     c.header(
