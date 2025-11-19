@@ -59,12 +59,8 @@
           "name": "border_lengths_product_id_products_id_fk",
           "tableFrom": "border_lengths",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -143,12 +139,8 @@
           "name": "colors_product_id_products_id_fk",
           "tableFrom": "colors",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -226,12 +218,8 @@
           "name": "custom_columns_product_id_products_id_fk",
           "tableFrom": "custom_columns",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -481,12 +469,8 @@
           "name": "materials_product_id_products_id_fk",
           "tableFrom": "materials",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -540,12 +524,8 @@
           "name": "sizes_product_id_products_id_fk",
           "tableFrom": "sizes",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -623,12 +603,8 @@
           "name": "variants_product_id_products_id_fk",
           "tableFrom": "variants",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -715,12 +691,8 @@
           "name": "orders_customer_id_app_users_id_fk",
           "tableFrom": "orders",
           "tableTo": "app_users",
-          "columnsFrom": [
-            "customer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["customer_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -872,12 +844,8 @@
           "name": "order_details_product_id_products_id_fk",
           "tableFrom": "order_details",
           "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -885,12 +853,8 @@
           "name": "order_details_material_materials_id_fk",
           "tableFrom": "order_details",
           "tableTo": "materials",
-          "columnsFrom": [
-            "material"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["material"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -898,12 +862,8 @@
           "name": "order_details_variant_id_variants_id_fk",
           "tableFrom": "order_details",
           "tableTo": "variants",
-          "columnsFrom": [
-            "variant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["variant_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -911,12 +871,8 @@
           "name": "order_details_color_id_colors_id_fk",
           "tableFrom": "order_details",
           "tableTo": "colors",
-          "columnsFrom": [
-            "color_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["color_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -924,12 +880,8 @@
           "name": "order_details_custom_column_id_custom_columns_id_fk",
           "tableFrom": "order_details",
           "tableTo": "custom_columns",
-          "columnsFrom": [
-            "custom_column_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["custom_column_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -937,12 +889,8 @@
           "name": "order_details_border_length_id_border_lengths_id_fk",
           "tableFrom": "order_details",
           "tableTo": "border_lengths",
-          "columnsFrom": [
-            "border_length_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["border_length_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

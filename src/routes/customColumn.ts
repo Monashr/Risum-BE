@@ -35,7 +35,7 @@ export const customColumnRoute = new Hono()
   // ---------------------------
   // CREATE (DELETE OLD FIRST)
   // ---------------------------
-  .post("/", authMiddleware(), async (c) => {
+  .post("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const form = await c.req.formData();
 
     const name = form.get("name") as string | null;
@@ -175,7 +175,7 @@ export const customColumnRoute = new Hono()
   // ---------------------------
   // DELETE
   // ---------------------------
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
 
     const deleted = softDelete(db, customColumns, customColumns.id, id);

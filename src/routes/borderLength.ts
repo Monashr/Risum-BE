@@ -38,17 +38,22 @@ export const borderLengthsRoute = new Hono()
   //   return c.json({ borderLength: result });
   // })
 
-  .post("/", authMiddleware(), zValidator("json", createborderLengthSchema), async (c) => {
-    const data = c.req.valid("json");
+  .post(
+    "/",
+    authMiddleware(["admin", "ppic", "sales"]),
+    zValidator("json", createborderLengthSchema),
+    async (c) => {
+      const data = c.req.valid("json");
 
-    // 1. delete old borderlength for this productId
-    await softDelete(db, borderLengths, borderLengths.productId, data.productId);
+      // 1. delete old borderlength for this productId
+      await softDelete(db, borderLengths, borderLengths.productId, data.productId);
 
-    // 2. insert new borderlength
-    const [inserted] = await db.insert(borderLengths).values(data).returning();
+      // 2. insert new borderlength
+      const [inserted] = await db.insert(borderLengths).values(data).returning();
 
-    return c.json({ borderLength: inserted }, 201);
-  })
+      return c.json({ borderLength: inserted }, 201);
+    },
+  )
 
   // .put("/:id{[0-9]+}", zValidator("json", updateborderLengthSchema), async (c) => {
   //   const id = Number(c.req.param("id"));
@@ -67,7 +72,7 @@ export const borderLengthsRoute = new Hono()
   //   return c.json({ borderLength: updated });
   // })
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
 
     const deleted = await softDelete(db, borderLengths, borderLengths.id, id);

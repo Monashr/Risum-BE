@@ -26,7 +26,7 @@ export const materialRoute = new Hono()
   //   return c.json({ materials: result });
   // })
 
-  .post("/", authMiddleware(), async (c) => {
+  .post("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const form = await c.req.formData();
     const { data, errors } = parseMaterialFormData(form);
 
@@ -134,7 +134,7 @@ export const materialRoute = new Hono()
   //   return c.json({ material: updated });
   // })
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
     const [deleted] = await db.delete(materials).where(eq(materials.id, id)).returning();
 

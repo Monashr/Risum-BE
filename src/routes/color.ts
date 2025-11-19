@@ -47,11 +47,16 @@ export const colorRoute = new Hono()
   //   return c.json({ color: result });
   // })
 
-  .post("/", authMiddleware(), zValidator("json", createColorSchema), async (c) => {
-    const data = c.req.valid("json");
-    const [inserted] = await db.insert(colors).values(data).returning();
-    return c.json({ color: inserted }, 201);
-  })
+  .post(
+    "/",
+    authMiddleware(["admin", "ppic", "sales"]),
+    zValidator("json", createColorSchema),
+    async (c) => {
+      const data = c.req.valid("json");
+      const [inserted] = await db.insert(colors).values(data).returning();
+      return c.json({ color: inserted }, 201);
+    },
+  )
 
   // .put("/:id{[0-9]+}", zValidator("json", updateColorSchema), async (c) => {
   //   const id = Number(c.req.param("id"));
@@ -66,7 +71,7 @@ export const colorRoute = new Hono()
   //   return c.json({ color: updated });
   // })
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
     const deleted = softDelete(db, colors, colors.id, id);
 

@@ -20,7 +20,12 @@ export async function getManyVariants() {
   });
 }
 
-export async function insertVariant(tx: any, name: string, additionPrice: number, productId: number) {
+export async function insertVariant(
+  tx: any,
+  name: string,
+  additionPrice: number,
+  productId: number,
+) {
   return tx
     .insert(variants)
     .values({

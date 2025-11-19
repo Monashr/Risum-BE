@@ -10,8 +10,8 @@ import { getCurrentUser } from "../utils/getCurrentUser";
 import { products } from "../db/schema/products";
 import { borderLengths } from "../db/schema/borderLengths";
 import { colors } from "../db/schema/color";
-import { materials } from '../db/schema/materials';
-import { customColumns } from '../db/schema/customColumns';
+import { materials } from "../db/schema/materials";
+import { customColumns } from "../db/schema/customColumns";
 
 // ---------------------
 // ZOD SCHEMAS
@@ -75,7 +75,7 @@ export const orderRoute = new Hono()
   // -----------------------------
   // GET ALL ORDERS
   // -----------------------------
-  .get("/", async (c) => {
+  .get("/", authMiddleware(), async (c) => {
     const parsed = paginationSchema.parse({
       page: c.req.query("page"),
       limit: c.req.query("limit"),
@@ -109,7 +109,7 @@ export const orderRoute = new Hono()
   // -----------------------------
   // GET ORDERS BY USER
   // -----------------------------
-  .get("/user/user", async (c) => {
+  .get("/user/user", authMiddleware(), async (c) => {
     const user = await getCurrentUser(c);
     if (!user) return c.json({ error: "Unauthorized" }, 401);
 
@@ -134,7 +134,7 @@ export const orderRoute = new Hono()
   // -----------------------------
   // GET ORDER BY ID
   // -----------------------------
-  .get("/:id", async (c) => {
+  .get("/:id", authMiddleware(), async (c) => {
     const id = c.req.param("id");
 
     const result = await db.query.orders.findFirst({

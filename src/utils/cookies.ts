@@ -32,7 +32,9 @@ function decrypt(value: string): string | null {
 
 // --- Helper to get dynamic cookie options ---
 function getCookieOptions(maxAge?: number) {
-  console.log(isProduction ? "Setting production cookie options" : "Setting development cookie options");
+  console.log(
+    isProduction ? "Setting production cookie options" : "Setting development cookie options",
+  );
   return {
     httpOnly: true,
     secure: isProduction, // secure in prod, false in dev

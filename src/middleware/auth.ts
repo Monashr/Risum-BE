@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { readSessionIdFromHeader } from "../utils/cookies";
 
 export const authMiddleware =
-  (requireAdmin = false) =>
+  (allowedRoles: string[] = []) =>
   async (c: any, next: any) => {
     try {
       const cookieHeader = c.req.raw.headers?.get("cookie") || "";
@@ -28,7 +28,7 @@ export const authMiddleware =
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      if (requireAdmin && appUserRow.role !== "admin") {
+      if (allowedRoles.length > 0 && !allowedRoles.includes(appUserRow.role)) {
         return c.json({ error: "Forbidden" }, 403);
       }
 

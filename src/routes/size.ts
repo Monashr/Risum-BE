@@ -20,18 +20,23 @@ const updateSizeSchema = createSizeSchema.partial();
 
 export const sizeRoute = new Hono()
 
-  .get("/", async (c) => {
+  .get("/", authMiddleware(), async (c) => {
     const result = await db.query.sizes.findMany();
     return c.json({ sizes: result });
   })
 
-  .post("/", authMiddleware(), zValidator("json", createSizeSchema), async (c) => {
-    const data = c.req.valid("json");
-    const [inserted] = await db.insert(sizes).values(data).returning();
-    return c.json({ size: inserted }, 201);
-  })
+  .post(
+    "/",
+    authMiddleware(["admin", "ppic", "sales"]),
+    zValidator("json", createSizeSchema),
+    async (c) => {
+      const data = c.req.valid("json");
+      const [inserted] = await db.insert(sizes).values(data).returning();
+      return c.json({ size: inserted }, 201);
+    },
+  )
 
-  .get("/:id{[0-9]+}", async (c) => {
+  .get("/:id{[0-9]+}", authMiddleware(), async (c) => {
     const id = Number(c.req.param("id"));
 
     const result = await db.query.sizes.findFirst({
@@ -46,20 +51,25 @@ export const sizeRoute = new Hono()
     return c.json({ size: result });
   })
 
-  .put("/:id{[0-9]+}", authMiddleware(), zValidator("json", updateSizeSchema), async (c) => {
-    const id = Number(c.req.param("id"));
-    const updates = c.req.valid("json");
+  .put(
+    "/:id{[0-9]+}",
+    authMiddleware(["admin", "ppic", "sales"]),
+    zValidator("json", updateSizeSchema),
+    async (c) => {
+      const id = Number(c.req.param("id"));
+      const updates = c.req.valid("json");
 
-    const [updated] = await db.update(sizes).set(updates).where(eq(sizes.id, id)).returning();
+      const [updated] = await db.update(sizes).set(updates).where(eq(sizes.id, id)).returning();
 
-    if (!updated) {
-      return c.notFound();
-    }
+      if (!updated) {
+        return c.notFound();
+      }
 
-    return c.json({ size: updated });
-  })
+      return c.json({ size: updated });
+    },
+  )
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
     const [deleted] = await db.delete(sizes).where(eq(sizes.id, id)).returning();
 
@@ -67,7 +77,7 @@ export const sizeRoute = new Hono()
     return c.json({ deleted });
   })
 
-  .put("/:id{[0-9]+}/picture", authMiddleware(), async (c) => {
+  .put("/:id{[0-9]+}/picture", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const id = Number(c.req.param("id"));
     const form = await c.req.formData();
 
@@ -102,7 +112,9 @@ export const sizeRoute = new Hono()
           console.log("removing image", data);
         }
 
-        const { data, error } = await supabase.storage.from("variant_images").upload(filePath, file);
+        const { data, error } = await supabase.storage
+          .from("variant_images")
+          .upload(filePath, file);
 
         if (error) {
           console.error(error);

@@ -42,7 +42,7 @@ const paginationSchema = z.object({
 
 export const productRoute = new Hono()
 
-  .get("/", async (c) => {
+  .get("/", authMiddleware(), async (c) => {
     const result = await db.query.products.findMany({
       orderBy: (t, { desc }) => desc(t.createdAt),
       with: {
@@ -67,7 +67,7 @@ export const productRoute = new Hono()
     return c.json({ data: result, total: result.length });
   })
 
-  .get("/paginated", async (c) => {
+  .get("/paginated", authMiddleware(), async (c) => {
     const parsed = paginationSchema.parse({
       page: c.req.query("page"),
       limit: c.req.query("limit"),
@@ -97,7 +97,7 @@ export const productRoute = new Hono()
     });
   })
 
-  .post("/", authMiddleware(), async (c) => {
+  .post("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const form = await c.req.formData();
 
     const name = form.get("name") as string | null;
@@ -194,7 +194,7 @@ export const productRoute = new Hono()
     );
   })
 
-  .get("/:id{[0-9]+}", async (c) => {
+  .get("/:id{[0-9]+}", authMiddleware(), async (c) => {
     const id = Number(c.req.param("id"));
 
     const result = await db.query.products.findFirst({
@@ -224,7 +224,7 @@ export const productRoute = new Hono()
     return c.json({ product: result });
   })
 
-  .put("/:id{[0-9]+}", authMiddleware(), async (c) => {
+  .put("/:id{[0-9]+}", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const id = Number(c.req.param("id"));
     const form = await c.req.formData();
 
@@ -339,7 +339,7 @@ export const productRoute = new Hono()
     return c.json({ product: updated });
   })
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
     const deleted = softDelete(db, products, products.id, id);
 

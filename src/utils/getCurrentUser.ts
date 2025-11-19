@@ -4,7 +4,7 @@ import { appUsers } from "../db/schema";
 import { readSessionIdFromHeader } from "./cookies";
 import { eq } from "drizzle-orm";
 
-export async function getCurrentUser(c:any) {
+export async function getCurrentUser(c: any) {
   const cookie = c.req.header("cookie") || "";
   const sessionId = readSessionIdFromHeader(cookie);
   if (!sessionId) return null;

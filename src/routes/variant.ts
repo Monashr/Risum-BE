@@ -9,7 +9,7 @@ import { softDelete } from "../db/utils/softDeletes";
 import { authMiddleware } from "../middleware/auth";
 
 export const variantRoute = new Hono()
-  .post("/", authMiddleware(), async (c) => {
+  .post("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const form = await c.req.formData();
     const { data, errors } = parseVariantFormData(form);
 
@@ -86,7 +86,7 @@ export const variantRoute = new Hono()
     );
   })
 
-  .delete("/:id{[0-9]+}", authMiddleware(true), async (c) => {
+  .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
 
     const updated = softDelete(db, variants, variants.id, id);
