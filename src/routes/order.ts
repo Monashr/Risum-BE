@@ -7,11 +7,6 @@ import { eq, count } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { getCurrentDateNumber } from "../utils/getCurrentDate";
 import { getCurrentUser } from "../utils/getCurrentUser";
-import { products } from "../db/schema/products";
-import { borderLengths } from "../db/schema/borderLengths";
-import { colors } from "../db/schema/color";
-import { materials } from "../db/schema/materials";
-import { customColumns } from "../db/schema/customColumns";
 
 // ---------------------
 // ZOD SCHEMAS
@@ -64,6 +59,18 @@ const orderSchema = z.object({
 const paginationSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(10),
+});
+
+const updateStatusSchema = z.object({
+  status: z.enum([
+    "PENDING",
+    "PAYMENT_UPLOADED",
+    "PAYMENT_CONFIRMED",
+    "PAYMENT_REJECTED",
+    "PROCESS",
+    "COMPLETED",
+    "CANCELED",
+  ]),
 });
 
 // ---------------------
@@ -157,6 +164,27 @@ export const orderRoute = new Hono()
     if (!result) return c.json({ error: "Order not found" }, 404);
 
     return c.json({ order: result });
+  })
+
+  // -----------------------------
+  // GET ORDER DETAILS BY ORDER ID (ADMIN/PPIC ONLY)
+  // -----------------------------
+  .get("/details/:id", authMiddleware(["admin", "ppic"]), async (c) => {
+    const id = c.req.param("id");
+
+    const result = await db.query.orderDetails.findMany({
+      where: eq(orderDetails.orderId, id),
+      with: {
+        products: true,
+        borderLengths: true,
+        colors: true,
+        materials: true,
+        variants: true,
+        customColumns: true,
+      },
+    });
+
+    return c.json({ orderDetails: result });
   })
 
   // -----------------------------
@@ -339,6 +367,37 @@ export const orderRoute = new Hono()
       .set({
         paymentImageUrl: imageUrl,
         paymentImageName: imageName,
+      })
+      .where(eq(orders.id, id))
+      .returning();
+
+    return c.json({ order: updated });
+  })
+
+  // -----------------------------
+  // UPDATE ORDER STATUS
+  // -----------------------------
+  .put("/:id/status", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    console.log("STATUSSS ", body);
+    const { status } = updateStatusSchema.parse(body);
+
+
+    const existing = await db.query.orders.findFirst({
+      where: eq(orders.id, id),
+    });
+
+    if (!existing) {
+      return c.json({ error: "Order not found" }, 404);
+    }
+
+
+    const [updated] = await db
+      .update(orders)
+      .set({
+        status,
+        updatedAt: new Date(),
       })
       .where(eq(orders.id, id))
       .returning();

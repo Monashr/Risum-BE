@@ -86,8 +86,6 @@ export const productRoute = new Hono()
       where: isNull(products.deletedAt),
     });
 
-    const total = result.length;
-
     return c.json({
       page: parsed.page,
       limit: parsed.limit,

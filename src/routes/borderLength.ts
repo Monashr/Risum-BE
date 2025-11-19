@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { db } from "../db/client";
 import { borderLengths } from "../db/schema";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { softDelete } from "../db/utils/softDeletes";
 import { authMiddleware } from "../middleware/auth";
