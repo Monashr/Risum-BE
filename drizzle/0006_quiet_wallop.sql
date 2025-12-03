@@ -1,0 +1,1 @@
+ALTER TABLE "product_materials" ADD COLUMN "id" serial PRIMARY KEY NOT NULL;

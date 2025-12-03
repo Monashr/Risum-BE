@@ -1,12 +1,22 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/client";
-import { borderLengths, colors, customColumns, products, variants } from "../db/schema";
-import { eq, isNull, sql } from "drizzle-orm";
+import {
+  borderLengths,
+  colors,
+  customColumns,
+  productMaterials,
+  products,
+  variants,
+  productSizes,
+  productColors,
+} from "../db/schema";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { supabase } from "../utils/supabase";
 import { getCurrentDateNumber } from "../utils/getCurrentDate";
 import { softDelete } from "../db/utils/softDeletes";
 import { authMiddleware } from "../middleware/auth";
+import { ProductWithUrl } from "../model/productModel";
 
 const productSchema = z.object({
   id: z.number().int().positive(),
@@ -40,6 +50,15 @@ const paginationSchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(10),
 });
 
+type WithUrl<T> = T & { pictureUrl?: string | null };
+
+type ProductWithUrls = WithUrl<typeof products.$inferSelect> & {
+  materials: { material: WithUrl<any> }[];
+  variants: WithUrl<any>[];
+  customColumns: WithUrl<any>[];
+  sizeImageUrl?: string | null;
+};
+
 export const productRoute = new Hono()
 
   .get("/", authMiddleware(), async (c) => {
@@ -48,12 +67,25 @@ export const productRoute = new Hono()
       with: {
         colors: {
           where: isNull(colors.deletedAt),
+          with: {
+            color: true,
+          },
         },
-        materials: true,
+        materials: {
+          where: isNull(productMaterials.deletedAt),
+          with: {
+            material: true,
+          },
+        },
         variants: {
-          where: isNull(colors.deletedAt),
+          where: isNull(variants.deletedAt),
         },
-        sizes: true,
+        sizes: {
+          where: isNull(productSizes.deletedAt),
+          with: {
+            size: true,
+          },
+        },
         borderLengths: {
           where: isNull(borderLengths.deletedAt),
         },
@@ -63,6 +95,72 @@ export const productRoute = new Hono()
       },
       where: isNull(products.deletedAt),
     });
+
+    await Promise.all(
+      result.map(async (product) => {
+        const p = product as ProductWithUrls;
+
+        // MATERIALS
+        await Promise.all(
+          p.materials.map(async (pm) => {
+            const mat = pm.material;
+            if (!mat.pictureName) return;
+
+            const { data } = await supabase.storage
+              .from("variant_images")
+              .createSignedUrl(mat.pictureName, 3600);
+
+            if (data?.signedUrl) {
+              pm.material.pictureUrl = data.signedUrl;
+            }
+          }),
+        );
+
+        // VARIANTS
+        await Promise.all(
+          p.variants.map(async (v) => {
+            if (!v.pictureName) return;
+
+            const { data } = await supabase.storage
+              .from("variant_images")
+              .createSignedUrl(v.pictureName, 3600);
+
+            if (data?.signedUrl) v.pictureUrl = data.signedUrl;
+          }),
+        );
+
+        // CUSTOM COLUMNS
+        await Promise.all(
+          p.customColumns.map(async (cc) => {
+            if (!cc.pictureName) return;
+
+            const { data } = await supabase.storage
+              .from("variant_images")
+              .createSignedUrl(cc.pictureName, 3600);
+
+            if (data?.signedUrl) cc.pictureUrl = data.signedUrl;
+          }),
+        );
+
+        // SIZE IMAGE
+        if (p.sizeImageName) {
+          const { data } = await supabase.storage
+            .from("variant_images")
+            .createSignedUrl(p.sizeImageName, 3600);
+
+          if (data?.signedUrl) p.sizeImageUrl = data.signedUrl;
+        }
+
+        // PRODUCT IMAGE
+        if (p.pictureName) {
+          const { data } = await supabase.storage
+            .from("variant_images")
+            .createSignedUrl(p.pictureName, 3600);
+
+          if (data?.signedUrl) p.pictureUrl = data.signedUrl;
+        }
+      }),
+    );
 
     return c.json({ data: result, total: result.length });
   })
@@ -86,10 +184,30 @@ export const productRoute = new Hono()
       where: isNull(products.deletedAt),
     });
 
+    const signedProducts = await Promise.all(
+      result.map(async (product) => {
+        if (!product.pictureName) return product;
+
+        const { data, error } = await supabase.storage
+          .from("variant_images")
+          .createSignedUrl(product.pictureName, 60 * 60);
+
+        if (error) {
+          console.error("Signed URL error:", error);
+          return product;
+        }
+
+        return {
+          ...product,
+          pictureUrl: data.signedUrl,
+        };
+      }),
+    );
+
     return c.json({
       page: parsed.page,
       limit: parsed.limit,
-      data: result,
+      data: signedProducts,
       total: count,
       hasMore: offset + result.length < (count ?? 0),
     });
@@ -133,7 +251,6 @@ export const productRoute = new Hono()
           sizeImageName: sizeImage,
           sizeImageUrl: sizeImage,
           pictureName: null,
-          pictureUrl: null,
           category: category,
         })
         .returning();
@@ -170,7 +287,6 @@ export const productRoute = new Hono()
           .update(products)
           .set({
             pictureName: fileName,
-            pictureUrl: imageUrl,
           })
           .where(eq(products.id, inserted.id));
       }
@@ -195,31 +311,115 @@ export const productRoute = new Hono()
   .get("/:id{[0-9]+}", authMiddleware(), async (c) => {
     const id = Number(c.req.param("id"));
 
-    const result = await db.query.products.findFirst({
+    const product = await db.query.products.findFirst({
       where: eq(products.id, id),
       with: {
-        materials: true,
-        sizes: true,
-        variants: {
-          where: isNull(variants.deletedAt),
+        materials: {
+          where: isNull(productMaterials.deletedAt),
+          with: {
+            material: true,
+          },
+        },
+        sizes: {
+          where: isNull(productSizes.deletedAt),
+          with: {
+            size: true,
+          },
         },
         colors: {
-          where: isNull(colors.deletedAt),
+          where: isNull(productColors.deletedAt),
+          with: {
+            color: true,
+          },
         },
-        borderLengths: {
-          where: isNull(borderLengths.deletedAt),
-        },
-        customColumns: {
-          where: isNull(customColumns.deletedAt),
-        },
+        variants: { where: isNull(variants.deletedAt) },
+        borderLengths: { where: isNull(borderLengths.deletedAt) },
+        customColumns: { where: isNull(customColumns.deletedAt) },
       },
     });
 
-    if (!result) {
-      return c.notFound();
+    if (!product) return c.notFound();
+
+    for (let i = 0; i < product.materials.length; i++) {
+      const pm = product.materials[i];
+      const mat = pm.material;
+
+      if (!mat.pictureName) continue;
+
+      const { data, error } = await supabase.storage
+        .from("variant_images")
+        .createSignedUrl(mat.pictureName, 60 * 60);
+
+      if (!error && data?.signedUrl) {
+        product.materials[i].material = {
+          ...mat,
+          pictureUrl: data.signedUrl,
+        } as typeof mat & { pictureUrl: string };
+      }
     }
 
-    return c.json({ product: result });
+    for (let i = 0; i < product.variants.length; i++) {
+      const variant = product.variants[i];
+
+      if (!variant.pictureName) continue;
+
+      const { data, error } = await supabase.storage
+        .from("variant_images")
+        .createSignedUrl(variant.pictureName, 60 * 60);
+
+      if (!error && data?.signedUrl) {
+        product.variants[i] = {
+          ...variant,
+          pictureUrl: data.signedUrl,
+        } as typeof variant & { pictureUrl: string };
+      }
+    }
+
+    if (product.customColumns.length > 0) {
+      for (let i = 0; i < product.customColumns.length; i++) {
+        const customColumn = product.customColumns[i];
+
+        if (!customColumn.pictureName) continue;
+
+        const { data, error } = await supabase.storage
+          .from("variant_images")
+          .createSignedUrl(customColumn.pictureName, 60 * 60);
+
+        if (!error && data?.signedUrl) {
+          product.customColumns[i] = {
+            ...customColumn,
+            pictureUrl: data.signedUrl,
+          } as typeof customColumn & { pictureUrl: string };
+        }
+      }
+    }
+
+    if (product.sizeImageName) {
+      const { data, error } = await supabase.storage
+        .from("variant_images")
+        .createSignedUrl(product.sizeImageName, 60 * 60);
+
+      if (!error && data?.signedUrl) {
+        product.sizeImageUrl = data.signedUrl;
+      }
+    }
+
+    if (product.pictureName) {
+      const { data, error } = await supabase.storage
+        .from("variant_images")
+        .createSignedUrl(product.pictureName, 60 * 60);
+
+      if (!error && data?.signedUrl) {
+        const productWithUrl: ProductWithUrl = {
+          ...product,
+          pictureUrl: data?.signedUrl ?? null,
+        };
+
+        return c.json({ product: productWithUrl });
+      }
+    }
+
+    return c.json({ product });
   })
 
   .put("/:id{[0-9]+}", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
@@ -261,7 +461,7 @@ export const productRoute = new Hono()
         : form.get("customColumn") === "false"
           ? false
           : undefined;
-    // const sizeImage = form.get("sizeImage") as string | null;
+
     const file = form.get("picture") as File | null;
 
     if (!name) {
@@ -277,7 +477,7 @@ export const productRoute = new Hono()
         throw new Error("Product not found");
       }
 
-      let imageUrl = existing.pictureUrl;
+      // let imageUrl = existing.pictureUrl;
       let imageName = existing.pictureName;
 
       if (file) {
@@ -303,7 +503,7 @@ export const productRoute = new Hono()
           .from("variant_images")
           .getPublicUrl(filePath);
 
-        imageUrl = publicUrlData.publicUrl;
+        // imageUrl = publicUrlData.publicUrl;
         imageName = filePath;
       }
 
@@ -320,7 +520,6 @@ export const productRoute = new Hono()
           canAddText,
           canAddBorderLength,
           canAddLogo,
-          pictureUrl: imageUrl ?? existing.pictureUrl,
           pictureName: imageName ?? existing.pictureName,
           category: category,
         })
@@ -344,4 +543,170 @@ export const productRoute = new Hono()
     if (!deleted) return c.json({ error: "Not found" }, 404);
 
     return c.json({ deleted });
+  })
+
+  .put("/:productId{[0-9]+}/materials", authMiddleware(), async (c) => {
+    const productId = Number(c.req.param("productId"));
+    const { materialIds } = await c.req.json();
+
+    // 1. Fetch existing (including soft-deleted)
+    const existing = await db.query.productMaterials.findMany({
+      where: eq(productMaterials.productId, productId),
+    });
+
+    const existingIds = existing.map((pm) => pm.materialId);
+
+    // 2. Compute diffs
+    const toAdd = materialIds.filter((id: number) => !existingIds.includes(id));
+
+    const toRestore = existing
+      .filter((pm) => pm.deletedAt !== null && materialIds.includes(pm.materialId))
+      .map((pm) => pm.materialId);
+
+    const toSoftDelete = existing
+      .filter((pm) => pm.deletedAt === null && !materialIds.includes(pm.materialId))
+      .map((pm) => pm.materialId);
+
+    // 3. DB actions
+    if (toAdd.length > 0) {
+      await db.insert(productMaterials).values(
+        toAdd.map((id: number) => ({
+          productId: productId,
+          materialId: id,
+          deletedAt: null,
+        })),
+      );
+    }
+
+    if (toRestore.length > 0) {
+      await db
+        .update(productMaterials)
+        .set({ deletedAt: null })
+        .where(
+          and(
+            eq(productMaterials.productId, productId),
+            inArray(productMaterials.materialId, toRestore),
+          ),
+        );
+    }
+
+    if (toSoftDelete.length > 0) {
+      await db
+        .update(productMaterials)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(productMaterials.productId, productId),
+            inArray(productMaterials.materialId, toSoftDelete),
+          ),
+        );
+    }
+
+    return c.json({ success: true });
+  })
+
+  .put("/:productId{[0-9]+}/sizes", authMiddleware(), async (c) => {
+    const productId = Number(c.req.param("productId"));
+    const { sizeIds } = await c.req.json();
+
+    // 1. Fetch existing (including soft-deleted)
+    const existing = await db.query.productSizes.findMany({
+      where: eq(productSizes.productId, productId),
+    });
+
+    const existingIds = existing.map((ps) => ps.sizeId);
+
+    // 2. Compute diffs
+    const toAdd = sizeIds.filter((id: number) => !existingIds.includes(id));
+
+    const toRestore = existing
+      .filter((ps) => ps.deletedAt !== null && sizeIds.includes(ps.sizeId))
+      .map((ps) => ps.sizeId);
+
+    const toSoftDelete = existing
+      .filter((ps) => ps.deletedAt === null && !sizeIds.includes(ps.sizeId))
+      .map((ps) => ps.sizeId);
+
+    // 3. DB actions
+    if (toAdd.length > 0) {
+      await db.insert(productSizes).values(
+        toAdd.map((id: number) => ({
+          productId: productId,
+          sizeId: id,
+          deletedAt: null,
+        })),
+      );
+    }
+
+    if (toRestore.length > 0) {
+      await db
+        .update(productSizes)
+        .set({ deletedAt: null })
+        .where(and(eq(productSizes.productId, productId), inArray(productSizes.sizeId, toRestore)));
+    }
+
+    if (toSoftDelete.length > 0) {
+      await db
+        .update(productSizes)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(eq(productSizes.productId, productId), inArray(productSizes.sizeId, toSoftDelete)),
+        );
+    }
+
+    return c.json({ success: true });
+  })
+
+  .put("/:productId{[0-9]+}/colors", authMiddleware(), async (c) => {
+    const productId = Number(c.req.param("productId"));
+    const { colorIds } = await c.req.json();
+
+    // 1. Fetch existing (including soft-deleted)
+    const existing = await db.query.productColors.findMany({
+      where: eq(productColors.productId, productId),
+    });
+
+    const existingIds = existing.map((pc) => pc.colorId);
+
+    // 2. Compute diffs
+    const toAdd = colorIds.filter((id: number) => !existingIds.includes(id));
+
+    const toRestore = existing
+      .filter((pc) => pc.deletedAt !== null && colorIds.includes(pc.colorId))
+      .map((pc) => pc.colorId);
+
+    const toSoftDelete = existing
+      .filter((pc) => pc.deletedAt === null && !colorIds.includes(pc.colorId))
+      .map((pc) => pc.colorId);
+
+    // 3. DB actions
+    if (toAdd.length > 0) {
+      await db.insert(productColors).values(
+        toAdd.map((id: number) => ({
+          productId: productId,
+          colorId: id,
+          deletedAt: null,
+        })),
+      );
+    }
+
+    if (toRestore.length > 0) {
+      await db
+        .update(productColors)
+        .set({ deletedAt: null })
+        .where(
+          and(eq(productColors.productId, productId), inArray(productColors.colorId, toRestore)),
+        );
+    }
+
+    if (toSoftDelete.length > 0) {
+      await db
+        .update(productColors)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(eq(productColors.productId, productId), inArray(productColors.colorId, toSoftDelete)),
+        );
+    }
+
+    return c.json({ success: true });
   });

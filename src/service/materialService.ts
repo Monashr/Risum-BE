@@ -1,17 +1,7 @@
 import { isNull } from "drizzle-orm";
 import { db } from "../db/client";
-import { materials, variants } from "../db/schema";
-
-export interface MaterialInput {
-  name: string | null;
-  productId: number | null;
-  file: File | null;
-}
-
-export interface MaterialValidation {
-  data: MaterialInput | null;
-  errors: string[];
-}
+import { materials } from "../db/schema";
+import { MaterialInput, MaterialValidation } from "../DTO/materialDTO";
 
 export async function getManyMaterial() {
   return await db.query.materials.findMany({
@@ -32,25 +22,35 @@ export async function insertMaterial(tx: any, name: string, productId: number) {
 }
 
 export function parseMaterialFormData(form: FormData): MaterialValidation {
-  const name = form.get("name");
-  const productId = form.get("productId");
-  const file = form.get("picture");
+  const input: MaterialInput = extractFormData(form);
 
   const errors: string[] = [];
 
-  const parsed: MaterialInput = {
-    name: typeof name === "string" ? name.trim() : null,
-    productId: typeof productId === "string" ? Number(productId) : null,
-    file: file instanceof File ? file : null,
-  };
+  if (!input.name) {
+    errors.push("Name is required.");
+  }
 
-  if (!parsed.name) errors.push("Name is required.");
-  if (!parsed.productId || isNaN(parsed.productId)) {
+  if (!input.productId || isNaN(input.productId)) {
     errors.push("Product ID is required and must be a number.");
   }
 
   return {
-    data: errors.length > 0 ? null : parsed,
+    data: errors.length > 0 ? null : input,
     errors,
+  };
+}
+
+function extractFormData(form: FormData): MaterialInput {
+  const name = form.get("name") as string | null;
+
+  const productIdRaw = form.get("productId");
+  const productId = typeof productIdRaw === "string" ? Number(productIdRaw) : null;
+
+  const file = form.get("picture") as File | null;
+
+  return {
+    name,
+    productId: isNaN(productId!) ? null : productId,
+    file,
   };
 }

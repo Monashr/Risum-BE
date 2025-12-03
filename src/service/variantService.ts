@@ -54,9 +54,11 @@ export function parseVariantFormData(form: FormData): VariantValidation {
   };
 
   if (!parsed.name) errors.push("Name is required.");
+
   if (parsed.additionPrice === null || isNaN(parsed.additionPrice)) {
     errors.push("Addition price is required and must be a number.");
   }
+
   if (!parsed.productId || isNaN(parsed.productId)) {
     errors.push("Product ID is required and must be a number.");
   }

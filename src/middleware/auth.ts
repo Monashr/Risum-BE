@@ -1,4 +1,3 @@
-// src/middleware/auth.ts
 import { db } from "../db/client";
 import { sessions } from "../db/schema/sessions";
 import { appUsers } from "../db/schema";
@@ -32,7 +31,6 @@ export const authMiddleware =
         return c.json({ error: "Forbidden" }, 403);
       }
 
-      // Attach user to context for downstream handlers
       c.set("user", { id: appUserRow.id, role: appUserRow.role });
 
       await next();

@@ -16,6 +16,8 @@ import { colors } from "./color";
 import { borderLengths } from "./borderLengths";
 import { customColumns } from "./customColumns";
 import { materials } from "./materials";
+import { colorsV2 } from "./colorsV2";
+import { materialsV2 } from "./materialsV2";
 
 export const orderDetailStatusEnum = pgEnum("order_status", [
   "PENDING", // Order created, awaiting payment
@@ -32,11 +34,11 @@ export const orderDetails = pgTable("order_details", {
 
   size: varchar("size"),
 
-  materialId: integer("material").references(() => materials.id, { onDelete: "cascade" }),
+  materialId: integer("material_id").references(() => materialsV2.id, { onDelete: "cascade" }),
 
   variantId: integer("variant_id").references(() => variants.id, { onDelete: "cascade" }),
 
-  colorId: integer("color_id").references(() => colors.id, { onDelete: "cascade" }),
+  colorId: integer("color_id").references(() => colorsV2.id, { onDelete: "cascade" }),
 
   customColumnId: integer("custom_column_id").references(() => customColumns.id, {
     onDelete: "cascade",
@@ -81,17 +83,17 @@ export const orderDetailsRelations = relations(orderDetails, ({ one }) => ({
     fields: [orderDetails.variantId],
     references: [variants.id],
   }),
-  colors: one(colors, {
+  colors: one(colorsV2, {
     fields: [orderDetails.colorId],
-    references: [colors.id],
+    references: [colorsV2.id],
   }),
   borderLengths: one(borderLengths, {
     fields: [orderDetails.borderLengthId],
     references: [borderLengths.id],
   }),
-  materials: one(materials, {
+  materials: one(materialsV2, {
     fields: [orderDetails.materialId],
-    references: [materials.id],
+    references: [materialsV2.id],
   }),
   customColumns: one(customColumns, {
     fields: [orderDetails.customColumnId],

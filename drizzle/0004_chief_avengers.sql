@@ -1,0 +1,1 @@
+ALTER TABLE "materials_v2" ALTER COLUMN "deleted_at" DROP DEFAULT;

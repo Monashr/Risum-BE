@@ -1,22 +1,38 @@
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { materials } from "../db/schema";
+import { materialsV2} from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { insertMaterial, parseMaterialFormData } from "../service/materialService";
+import {
+  insertMaterialV2,
+  parseMaterialV2FormData,
+  getManyMaterialV2,
+  signMaterialImages,
+  softDeleteMaterialV2,
+  softDeleteMaterialV2Pivot,
+} from "../service/materialV2Service";
 import { validateUploadedFile } from "../utils/uploadValidator";
 import { supabase } from "../utils/supabase";
 
-export const materialRoute = new Hono()
+export const materialV2Route = new Hono()
+
+  .get("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
+    const result = await getManyMaterialV2();
+
+    const signedProducts = await signMaterialImages(result);
+
+    return c.json(signedProducts);
+  })
+
   .post("/", authMiddleware(["admin", "ppic", "sales"]), async (c) => {
     const form = await c.req.formData();
-    const { data, errors } = parseMaterialFormData(form);
+    const { data, errors } = parseMaterialV2FormData(form);
 
     if (errors.length > 0) {
       return c.json({ errors }, 400);
     }
 
-    const { name, productId, file } = data!;
+    const { name, file } = data!;
 
     if (file) {
       try {
@@ -30,19 +46,18 @@ export const materialRoute = new Hono()
     }
 
     const result = await db.transaction(async (tx) => {
-      const insertedRows = await insertMaterial(tx, name!, productId!);
+      const insertedRows = await insertMaterialV2(tx, name!);
 
       if (!insertedRows || insertedRows.length === 0) {
         throw new Error("Failed to insert material");
       }
 
       const inserted = insertedRows[0];
-      let imageUrl: string | null = null;
       let fileName: string | null = null;
 
       if (file) {
         const ext = file.name.split(".").pop();
-        fileName = `material_${inserted.id}_${Date.now()}.${ext}`;
+        fileName = `materialv2_${inserted.id}_${Date.now()}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("variant_images")
@@ -53,31 +68,23 @@ export const materialRoute = new Hono()
           throw new Error(uploadError.message);
         }
 
-        const { data: publicUrlData } = supabase.storage
-          .from("variant_images")
-          .getPublicUrl(fileName);
-
-        imageUrl = publicUrlData.publicUrl;
-
         await tx
-          .update(materials)
+          .update(materialsV2)
           .set({
             pictureName: fileName,
-            pictureUrl: imageUrl,
           })
-          .where(eq(materials.id, inserted.id));
+          .where(eq(materialsV2.id, inserted.id));
       }
 
-      return { inserted, imageUrl, fileName };
+      return { inserted, fileName };
     });
 
-    const { inserted, imageUrl, fileName } = result;
+    const { inserted, fileName } = result;
 
     return c.json(
       {
-        variant: {
+        material: {
           ...inserted,
-          picture_uri: imageUrl,
           picture_name: fileName,
         },
       },
@@ -87,8 +94,12 @@ export const materialRoute = new Hono()
 
   .delete("/:id{[0-9]+}", authMiddleware(["admin"]), async (c) => {
     const id = Number(c.req.param("id"));
-    const [deleted] = await db.delete(materials).where(eq(materials.id, id)).returning();
+
+    const deleted = await softDeleteMaterialV2(id);
 
     if (!deleted) return c.json({ error: "Not found" }, 404);
+
+    await softDeleteMaterialV2Pivot(id);
+
     return c.json({ deleted });
   });

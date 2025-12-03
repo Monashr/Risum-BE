@@ -135,6 +135,24 @@ export const orderRoute = new Hono()
       orderBy: (t, { desc }) => desc(t.createdAt),
     });
 
+    // Sign all design images
+    for (let i = 0; i < result.length; i++) {
+      for (let j = 0; j < result[i].orderDetails.length; j++) {
+        const detail = result[i].orderDetails[j];
+
+        // Skip missing file name
+        if (!detail.designName) continue;
+
+        const { data, error } = await supabase.storage
+          .from("variant_images")
+          .createSignedUrl(detail.designName, 3600);
+
+        if (!error && data?.signedUrl) {
+          detail.designUrl = data.signedUrl;
+        }
+      }
+    }
+
     return c.json({ orders: result });
   })
 
@@ -162,6 +180,53 @@ export const orderRoute = new Hono()
     });
 
     if (!result) return c.json({ error: "Order not found" }, 404);
+
+    if (result.paymentImageName) {
+      const { data, error } = await supabase.storage
+        .from("variant_images")
+        .createSignedUrl(result.paymentImageName, 60 * 60);
+
+      if (!error && data?.signedUrl) {
+        result.paymentImageUrl = data.signedUrl;
+      }
+    }
+
+    await Promise.all(
+      result.orderDetails.map(async (detail) => {
+        if (detail.designName) {
+          const { data, error } = await supabase.storage
+            .from("variant_images")
+            .createSignedUrl(detail.designName, 60 * 60);
+
+          if (!error && data?.signedUrl) {
+            detail.designUrl = data.signedUrl;
+          }
+        }
+
+        if (detail.customColumns?.pictureName) {
+          const { data, error } = await supabase.storage
+            .from("variant_images")
+            .createSignedUrl(detail.customColumns.pictureName!, 60 * 60);
+
+          if (!error && data?.signedUrl) {
+            detail.customColumns.pictureUrl = data.signedUrl;
+          }
+        }
+
+        if (detail.materials) {
+          const { data, error } = await supabase.storage
+            .from("variant_images")
+            .createSignedUrl(detail.materials.pictureName!, 60 * 60);
+
+          if (!error && data?.signedUrl) {
+            detail.materials = {
+              ...detail.materials,
+              pictureUrl: data.signedUrl,
+            } as typeof detail.materials & { pictureUrl: string };;
+          }
+        }
+      }),
+    );
 
     return c.json({ order: result });
   })
@@ -203,7 +268,6 @@ export const orderRoute = new Hono()
     const orderData = orderSchema.parse(JSON.parse(orderJson));
     const items = z.array(createOrderDetailSchema).parse(JSON.parse(itemsJson));
 
-    // 🔥 Handle payment image
     const paymentFile = form.get("paymentImage") as File | null;
 
     let paymentImageName: string | null = null;
@@ -383,7 +447,6 @@ export const orderRoute = new Hono()
     console.log("STATUSSS ", body);
     const { status } = updateStatusSchema.parse(body);
 
-
     const existing = await db.query.orders.findFirst({
       where: eq(orders.id, id),
     });
@@ -391,7 +454,6 @@ export const orderRoute = new Hono()
     if (!existing) {
       return c.json({ error: "Order not found" }, 404);
     }
-
 
     const [updated] = await db
       .update(orders)

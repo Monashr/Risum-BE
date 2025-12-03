@@ -1,10 +1,7 @@
 import app from "../app";
-
-// Import and run environment validation at startup
 import { env } from "./config/env";
 import { z } from "zod";
 
-// Define the required environment variables schema
 const requiredEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]),
   SUPABASE_URL: z.string().url(),
@@ -18,16 +15,15 @@ const requiredEnvSchema = z.object({
 });
 
 try {
-  // Validate all required environment variables at startup
   requiredEnvSchema.parse(env);
   console.log("✅ Environment validation passed");
 } catch (error) {
   if (error instanceof z.ZodError) {
-    console.error("❌ CRITICAL: Environment validation failed at startup:");
+    console.error("CRITICAL: Environment validation failed at startup:");
     error.issues.forEach((err) => {
       console.error(`  - ${err.path.join(".")}: ${err.message}`);
     });
-    console.error("\n🚨 Server cannot start without valid environment variables.");
+    console.error("\nServer cannot start without valid environment variables.");
     console.error("Please check your .env file and ensure all required variables are set.");
     process.exit(1);
   }

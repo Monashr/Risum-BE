@@ -1,11 +1,11 @@
 import { pgTable, serial, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import { materials } from "./materials";
-import { sizes } from "./sizes";
-import { colors } from "./color";
 import { variants } from "./variants";
 import { borderLengths } from "./borderLengths";
 import { customColumns } from "./customColumns";
+import { productMaterials } from "./materialsV2";
+import { productSizes } from "./sizesV2";
+import { productColors } from "./colorsV2";
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -31,7 +31,7 @@ export const products = pgTable("products", {
 
   canAddLogo: boolean("can_add_logo").default(false),
 
-  pictureUrl: varchar("picture_url", { length: 1000 }),
+  // pictureUrl: varchar("picture_url", { length: 1000 }),
   pictureName: varchar("picture_name", { length: 255 }),
 
   category: varchar("category", { length: 50 }),
@@ -43,10 +43,10 @@ export const products = pgTable("products", {
 });
 
 export const productsRelations = relations(products, ({ many }) => ({
-  materials: many(materials),
-  sizes: many(sizes),
+  materials: many(productMaterials),
+  sizes: many(productSizes),
+  colors: many(productColors),
   variants: many(variants),
-  colors: many(colors),
   borderLengths: many(borderLengths),
   customColumns: many(customColumns),
 }));

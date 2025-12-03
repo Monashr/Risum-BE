@@ -9,3 +9,7 @@ export * from "./customColumns";
 
 export * from "./orders";
 export * from "./orderDetails";
+
+export * from "./materialsV2";
+export * from "./sizesV2";
+export * from "./colorsV2";

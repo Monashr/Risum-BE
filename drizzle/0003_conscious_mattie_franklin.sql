@@ -1,0 +1,1 @@
+ALTER TABLE "materials_v2" DROP COLUMN "picture_url";

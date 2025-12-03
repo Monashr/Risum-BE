@@ -12,6 +12,9 @@ import { orderRoute } from "./src/routes/order";
 import { customColumnRoute } from "./src/routes/customColumn";
 import { env } from "./src/config/env";
 import { globalRateLimit } from "./src/middleware/rateLimitter";
+import { materialV2Route } from "./src/routes/materialV2";
+import { sizeV2Route } from "./src/routes/sizeV2";
+import { colorV2Route } from "./src/routes/colorV2";
 
 const app = new Hono();
 
@@ -31,9 +34,12 @@ app
   .basePath("/api")
   .route("/products", productRoute)
   .route("/materials", materialRoute)
+  .route("/v2/materials", materialV2Route)
   .route("/sizes", sizeRoute)
+  .route("/v2/sizes", sizeV2Route)
   .route("/variants", variantRoute)
   .route("/colors", colorRoute)
+  .route("/v2/colors", colorV2Route)
   .route("/borderlengths", borderLengthsRoute)
   .route("/customcolumns", customColumnRoute)
   .route("/orders", orderRoute)
